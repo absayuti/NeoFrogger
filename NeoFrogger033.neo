@@ -1,0 +1,563 @@
+'============================================
+' Project   NeoFrogger
+' Target    Neo6502
+' Comments   
+'           Checkers game written in NeoBASIC 
+'			Ported from a Commodore VIC20 version
+'			
+' Author    AB Sayuti 2026
+'============================================
+' 
+' v0.33 - 15 July 2026
+'         Add Victory tune
+'         Add score for timeleft & frogs left
+'
+' v0.0  - 23 June 2026
+'
+
+'============================================
+'                                MAIN ROUTINE
+'--------------------------------------------
+CALL initialization()
+' Main loop
+playgame = 1
+REPEAT
+  CALL resetGame()
+  ' Game loop
+  REPEAT
+    CALL resetVars()
+    CALL gameScreen()
+    ' Play loop
+    REPEAT
+      CALL moveTraffic()
+      CALL moveFrog()
+      CALL checkHitMiss()
+      CALL updateInfo()
+      rep = rep+1
+      IF rep>7 THEN rep = 0
+      timeleft = INT(fulltime-(TIME()-timestart)/100)
+      IF timeleft<0 THEN fail=1: frogs=0
+    UNTIL goal | fail 
+    CURSOR 0,0
+    IF goal
+      CALL goalReached()
+    ELSE
+      CALL failed()
+    ENDIF
+    IF gameover=1 THEN CALL playVictoryTune()
+    WAIT 200   
+  UNTIL gameover
+  IF high<score THEN high=score
+  CALL askPlayAgain()
+UNTIL playgame = 0
+CLS
+PRINT "BYE"
+END
+
+'============================================
+'                                MOVE TRAFFIC
+'--------------------------------------------
+PROC moveTraffic()
+  CALL moveLogs()
+  CALL moveTurtles()
+  CALL moveCars()
+  CALL moveLorries()
+ENDPROC
+
+'============================================
+'                                   MOVE LOGS
+'--------------------------------------------
+PROC moveLogs()
+  ' Top row 
+  ro = 1
+  FOR n=0 TO 3
+    CALL placeSprite3( s.log, snum(0)+n*3, xLogA(n), ro )
+    xLogA(n) = xLogA(n)-1
+    IF xLogA(n)<-12 THEN xLogA(n)=80
+  NEXT  
+  ' Row 3
+  ro = 3
+  FOR n=0 TO 3
+    CALL placeSprite3( s.log, snum(1)+n*3, xLogB(n), ro )
+    xLogB(n) = xLogB(n)-1
+    IF xLogB(n)<-12 THEN xLogB(n)=80
+  NEXT  
+ENDPROC
+
+'============================================
+'                                MOVE TURTLES
+'--------------------------------------------
+PROC moveTurtles()
+  ' Top row 
+  IF rep<4
+    img = s.turtle
+  ELSE
+    img = s.turtle2
+  ENDIF
+  ro = 2
+  FOR n=0 TO 6
+    SPRITE snum(2)+n IMAGE img TO xTurtleA(n)*4+8,vrow(ro)
+    xTurtleA(n) = xTurtleA(n)+1
+    IF xTurtleA(n)>80 THEN xTurtleA(n)=-3
+    SPRITE snum(3)+n IMAGE img TO xTurtleB(n)*4+8,vrow(ro+2)
+    xTurtleB(n) = xTurtleB(n)+1
+    IF xTurtleB(n)>80 THEN xTurtleB(n)=-3
+  NEXT  
+ENDPROC
+
+'============================================
+'                                   MOVE CARS
+'--------------------------------------------
+PROC moveCars()
+  ro = 7
+  FOR n=0 TO 6
+    SPRITE snum(4)+n IMAGE iCarA(n) TO xCarA(n)*4+8,vrow(ro)
+    xCarA(n) = xCarA(n)-1
+    IF xCarA(n)<-3 THEN xCarA(n)=80
+    SPRITE snum(5)+n IMAGE iCarB(n) TO xCarB(n)*4+8,vrow(ro+1)
+    xCarB(n) = xCarB(n)+1
+    IF xCarB(n)>80 THEN xCarB(n)=-3
+  NEXT  
+ENDPROC
+
+'============================================
+'                                MOVE LORRIES
+'--------------------------------------------
+PROC moveLorries()
+  ro = 6
+  FOR n=0 TO 3
+    'SPRITE 55+n IMAGE s.lorry TO xLorryA(n)*4+8,ro*16+8
+    CALL placeSprite2( s.lorry, snum(6)+n*2, xLorryA(n), ro )
+    xLorryA(n) = xLorryA(n)-1
+    IF xLorryA(n)<-8 THEN xLorryA(n)=80
+    CALL placeSprite2( s.lorry3, snum(7)+n*2, xLorryB(n), ro+3 )
+    xLorryB(n) = xLorryB(n)+1
+    IF xLorryB(n)>80 THEN xLorryB(n)=-8
+  NEXT  
+ENDPROC
+
+'============================================
+'                                   MOVE FROG
+'--------------------------------------------
+PROC moveFrog()
+	k = ASC(INKEY$())
+  IF k THEN SFX 0,23
+	IF k=23 THEN r = -1
+	IF k=19 THEN r = 1
+	IF k=1 THEN c = -4
+	IF k=4 THEN c = 4
+  IF k=0 THEN r=0: c=0
+  orow = row
+  row = row+r
+  IF row>10 THEN row=10
+  'If NOT in the river, move FROG 
+  col = col+c
+  ' Move frog with logs if @ row 1 or 3
+  IF row=1 | row=3 THEN col = col-1
+  ' Move frog with turtles if @ row 2 or 4
+  IF row=2 | row=4 THEN col = col+1
+  ' Check column edges
+  IF col>80 THEN col=80
+  IF col<0 THEN col=0
+  ' Check if frog reached nest
+  colx = col*4
+  IF row=0 
+    FOR i=0 TO 4
+      d = INT(colx-nest(i))
+      IF d<0 THEN d=-d
+      IF d<8 & occup(i)=0 THEN colx=nest(i): goal=1: occup(i)=1
+    NEXT
+    IF goal=0 THEN fail=1
+  ENDIF
+  IF row<orow 
+    SPRITE 100 IMAGE s.frog3 TO colx+8,vrow(orow)-16
+    SPRITE 101 IMAGE s.frog4 TO colx+8,vrow(orow)
+    WAIT 10
+    SPRITE 101 IMAGE s.frog4 TO -50,0
+  ENDIF
+  SPRITE 100 IMAGE s.frog TO colx+8,vrow(row)
+ENDPROC
+
+'============================================
+'                             PLACE SPRITE 2
+'--------------------------------------------
+PROC placeSprite2(imgno, sprno, xo, ro)
+  SPRITE sprno IMAGE imgno TO xo*4+8,vrow(ro) SPRITE sprno+1 IMAGE imgno+1 BY 16,0
+ENDPROC
+
+'============================================
+'                             PLACE SPRITE 3
+'--------------------------------------------
+PROC placeSprite3(imgno, sprno, xo, ro)
+  SPRITE sprno IMAGE imgno TO xo*4+8,vrow(ro) SPRITE sprno+1 IMAGE imgno+1 BY 16,0 SPRITE sprno+2 IMAGE imgno+2 BY 16,0
+ENDPROC
+
+'============================================
+'                           CHECK HIT OR MISS
+'--------------------------------------------
+PROC checkHitMiss()
+  hx = 0
+  ' Check river
+  IF row>0 & row<5
+    ' From the sprite# of log1 to sprite# of turtle2
+    FOR i=snum(0) TO snum(4)-1
+      hx = hx + HIT(100,i,15)
+    NEXT
+    IF hx=0 THEN fail=1
+  ELSE
+  ' Check the road
+    IF row>5 & row<10
+      FOR i=snum(4) TO snum(8)-1
+        hx = hx + HIT(100,i,15)
+      NEXT
+      IF hx THEN fail=1
+    ENDIF
+  ENDIF
+ENDPROC
+
+'============================================
+'                                 UPDATE INFO
+'--------------------------------------------
+PROC updateInfo()
+  CURSOR 0,1
+  PRINT high
+  CURSOR 25,1
+  PRINT score
+  ' Update timer ticks
+  ticks = INT(timeleft/ticksize)
+  IF ticks<>oticks
+    FOR i=0 TO ticks
+       IMAGE t.wall2 TO i*16,14*16
+    NEXT
+    FOR i=ticks TO 19
+       IMAGE t.wall TO i*16,14*16
+    NEXT   
+    oticks = ticks
+  ENDIF
+ENDPROC
+
+'============================================
+'                            DRAW GAME SCREEN
+'
+' Screen = 320x240
+' Tile/sprite = 16x16
+' Rows x Columns = 15 rows x 20 columns
+' Layout:
+'       Score/status x 1     ####              
+'       Nests        x 2     ____
+'       River        x 4
+'       Wall         x 1
+'       Road         x 4
+'       Wall         x 2
+'       TOTAL        =14
+'--------------------------------------------
+PROC gameScreen()
+  INK c.black,c.green
+  CLS
+  ' The nests
+  ro = 0
+  FOR co=0 TO 19
+      IMAGE t.grass TO co*16,ro*16
+      IMAGE t.grass TO co*16,(ro+1)*16
+      IMAGE t.grass2 TO co*16,(ro+2)*16
+  NEXT
+  ro = 1
+  FOR i=0 TO 4
+    IMAGE t.grass2 TO nest(i),ro*16
+    IF occup(i)
+      IMAGE t.frog TO nest(i),(ro+1)*16
+    ELSE
+      IMAGE t.water TO nest(i),(ro+1)*16
+    ENDIF
+  NEXT
+  ' Water/river
+  FOR ro=3 TO 7
+    FOR co=0 TO 19
+      IMAGE t.water TO co*16,ro*16
+    NEXT
+  NEXT
+  ' Middle wall
+  ro = 8
+  FOR co=0 TO 19
+    IMAGE t.wall TO co*16,ro*16
+  NEXT
+  ' Road
+  FOR ro=9 TO 12
+    FOR co=0 TO 19
+      IF ro<12
+        IF (co%3)=0
+          IMAGE t.roadline TO co*16,ro*16
+        ELSE
+          IMAGE t.road TO co*16,ro*16
+        ENDIF
+      ELSE
+        IMAGE t.road TO co*16,ro*16
+      ENDIF
+    NEXT
+  NEXT
+  ' Bottom wall
+  FOR ro = 13 TO 14
+    FOR co=0 TO 19
+      IMAGE t.wall TO co*16,ro*16
+    NEXT
+  NEXT
+  ' Info at top of screen
+  CURSOR 0,0
+  PRINT "HIGH SCORE"
+  CURSOR 25,0
+  PRINT "SCORE"
+  CURSOR 43,0
+  IF frogs<5 THEN FOR i=frogs TO 4: PRINT "  ";: NEXT
+  FOR i=1 TO frogs: PRINT CHR$(192);" ";: NEXT
+  ENDIF
+  SFX 0,8
+ENDPROC
+
+'============================================
+'                              INITIALIZATION
+'--------------------------------------------
+PROC initialization()
+	'Set values for 16 colours
+	c.black   = 0
+  c.red     = 1
+  c.green   = 2 
+  c.yellow  = 3
+	c.blue    = 4
+  c.magenta = 5
+  c.cyan    = 6
+  c.white   = 7
+  CALL defGraphics()
+  CALL userDefinedCharacters()
+  CALL defKeyArrays()
+  CALL defVictoryTune()
+ENDPROC
+
+'============================================
+'                             DEFINE GRAPHICS
+'         Load graphics and assign numbers 
+'         for sprites and tiles
+'--------------------------------------------
+PROC defGraphics()
+	' Load graphics
+	gload "neofrogger.gfx"
+	' Tile 16x16 numbers
+  t.grass    = 0
+  t.grass2   = 1
+  t.wall     = 2
+  t.wall2    = 3 
+  t.water    = 4
+  t.road     = 5
+  t.roadline = 6
+  t.frog     = 7
+  ' Sprite 16x16 numbers
+	s.frog    = 128
+  s.frog2   = 129
+	s.frog3   = 130
+  s.frog4   = 131
+  s.car     = 132
+  s.car2    = 133
+  s.car3    = 134
+  s.car4    = 135
+  s.lorry   = 136
+  s.lorry2  = 137
+  s.lorry3  = 138
+  s.lorry4  = 139
+  s.turtle  = 140
+  s.turtle2 = 141
+  s.log     = 142
+  s.log2    = 143
+  s.log3    = 144
+ENDPROC
+
+'============================================
+'                     USER DEFINED CHARACTERS
+'         Character #192 = a small frog
+'--------------------------------------------
+PROC userDefinedCharacters()
+  'Clear previous commands
+  WHILE PEEK($FF00) <> 0 : WEND
+  'Select character slot 192
+  POKE $FF04, 192
+  ' Define the 7 rows (Binary maps columns 0 to 5)
+  POKE $FF05,$00 : '        0000 0000
+  POKE $FF06,$B4 : ' * ** * 1011 0100
+  POKE $FF07,$78 : '  ****  0111 1000
+  POKE $FF08,$FC : ' ****** 1111 1100
+  POKE $FF09,$FC : ' ****** 1111 1100
+  POKE $FF0A,$78 : '  ****  0111 1000
+  POKE $FF0B,$CC : ' **  ** 1100 1100
+  ' Execute API Console Function 5
+  POKE $FF01, 5
+  POKE $FF00, 2
+  'Wait for the hardware to process
+  WHILE PEEK($FF00) <> 0 : WEND
+ENDPROC
+
+'============================================
+'                           DEFINE KEY ARRAYS
+'         Arrays that hold positions of frog,
+'         turtles, lorries etc.
+'--------------------------------------------
+PROC defKeyArrays()
+  ' Key arrays
+  DIM xLogA(3), xLogB(3)  ' X postions of the logs
+  DIM xTurtleA(6), xTurtleB(6)  ' Turtles
+  DIM xLorryA(3), xLorryB(3)    ' Lorries
+  DIM xCarA(6), xCarB(6)        ' Cars
+  DIM iCarA(6), iCarB(6)        ' Car images
+  FOR i=0 TO 6
+    IF i%2 THEN iCarA(i)=s.car: iCarB(i)=s.car2
+    IF i%2=0 THEN iCarA(i)=s.car3: iCarB(i)=s.car4
+  NEXT
+  '
+  ' Starting sprite numbers for traffic objects
+  DIM snum(8)
+  FOR i=0 TO 8
+    READ snum(i)
+  NEXT
+      'logs   turtles cars    lorries [end#]
+      '(4x3)  (7)     (7)     (4x2)
+  DATA 1, 13, 25, 32, 39, 46, 53, 61, 69
+  '
+  ' Valid row positions for the frog
+  DIM vrow(10)
+  FOR i=0 TO 10
+    READ vrow(i)
+  NEXT
+     'nest log tur log tur  wall lorr car  car  lorr wall
+     '0   1   2   3   4    5    6    7    8    9    10  
+  DATA 40, 64, 80, 96, 112, 136, 152, 168, 184, 200, 220
+  '
+  ' Horizontal positions of the nests
+  DIM nest(4), occup(4)
+  FOR i=0 TO 4
+    nest(i) = INT((i*4+1.5)*16)
+  NEXT
+ENDPROC
+
+'============================================
+'                         DEFINE VICTORY TUNE
+'--------------------------------------------
+PROC defVictoryTune()
+  DIM vtune(26)
+  FOR i=0 TO 26
+    READ vtune(i)
+  NEXT
+  DATA 131, 165, 196, 262, 165, 196, 262, 330, 175, 220, 262, 349, 220, 262    
+  DATA 349, 440, 392, 330, 349, 294, 330, 262, 294, 247, 262, 392, 523
+ENDPROC
+
+'============================================
+'                           PLAY VICTORY TUNE
+'--------------------------------------------
+PROC playVictoryTune()
+  LOCAL i
+  FOR i=0 TO 25
+    SOUND 0,vtune(i),16
+    WAIT 16
+  NEXT
+  SOUND 0,vtune(26),64
+  WAIT 150
+ENDPROC
+
+'============================================
+'                                  RESET GAME
+'--------------------------------------------
+PROC resetGame()
+  ' Rest nest occupied status
+  FOR i=0 TO 4
+    occup(i) = 0
+  NEXT
+  frogs = 5
+  score = 0
+  gameover = 0
+  fulltime = 201
+  ticksize = INT(fulltime/20)
+  oticks = 19
+  timestart = TIME()
+ENDPROC
+
+'============================================
+'                             RESET VARIABLES    
+'--------------------------------------------
+PROC resetVars()
+  ' Reset traffics 
+  FOR i=0 TO 6
+    IF i<4
+      xLogA(i) = i*24
+      xLogB(i) = i*24+rand(12)
+      xLorryA(i) = i*18+rand(4)
+      xLorryB(i) = i*18+rand(8)
+    ENDIF
+    xTurtleA(i) = i*10+rand(8)+4
+    xTurtleB(i) = i*10+rand(8)
+    xCarA(i) = i*10+rand(4)
+    xCarB(i) = i*8+rand(4)
+  NEXT
+  ' Empty keyboard buffer
+  REPEAT
+    k$=INKEY$()
+  UNTIL k$=""
+  ' Reset other game variables
+  ' Frog's starting position
+  row = 10
+  col = 40
+  ' Others
+  rep = 0
+  goal = 0
+  fail = 0
+ENDPROC
+
+'============================================
+'                                GOAL REACHED
+'--------------------------------------------
+PROC goalReached()
+  SFX 0,5
+  score = score + 200
+  IF occup(0)+occup(1)+occup(2)+occup(3)+occup(4)=5
+    score = score + timeleft*10 + frogs*50
+    gameover=1
+  ENDIF
+ENDPROC  
+
+'============================================
+'                                      FAILED
+'         Failed to reach nest, either hit by
+'         traffic, fell into river or missed
+'         the nest(s) 
+'--------------------------------------------
+PROC failed()
+  SFX 0,22
+  SPRITE 100 IMAGE s.frog2 TO colx+8,vrow(row)
+  score = score+100-10*row
+  frogs = frogs-1
+  IF frogs=0 THEN gameover=2: SFX 1,10
+ENDPROC
+
+'============================================
+'                      ASK USER TO PLAY AGAIN
+'--------------------------------------------
+PROC askPlayAgain()
+  INK c.white, c.black
+  CLS
+  SPRITE CLEAR
+  SFX 0,3
+  TEXT "GAME OVER" DIM 2 TO 110,80
+  a$ = "SCORE:"+STR$(score)
+  TEXT a$ DIM 1 TO 132,100
+  a$ = "HIGHEST:"+STR$(high)
+  TEXT a$ TO 120,110
+  a$ = "Play again (Y/N)?"
+  TEXT a$ TO 114,130
+  REPEAT
+    k$ = INKEY$()
+    k$ = LOWER$(k$)
+    'CURSOR 0,0: PRINT k$;" "
+  UNTIL k$="y" | k$="n" 
+  IF k$="n" THEN playgame = 0
+  IF k$="y" THEN SFX 0,6
+ENDPROC
+
+'============================================
+'                                         END
+'============================================
