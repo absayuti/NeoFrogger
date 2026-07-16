@@ -2,6 +2,8 @@
 
 A "Frogger" game clone written in *NeoBASIC* for *Neo 6502*.
 
+<img width="842" height="733" alt="2026-07-16" src="https://github.com/user-attachments/assets/7aa50c58-d1a6-4e94-b829-41e65e58591c" />
+
 The files are:
 
 1. **Neofrogger.neo** -- source code of the program, written as structured BASIC in plain text (using NotePad++).
